@@ -102,6 +102,8 @@ void inicio()        //substituir por uma lógica com a nextion verdadeira
   else
   {
     digitalWrite(start_motor, LOW);
+    digitalWrite(relays[3][0], LOW);
+    relays[3][1] = 0;
   }
 
   if(relays[3][1] == 1 && sensores[5][1] == 1)
