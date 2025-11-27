@@ -1,14 +1,13 @@
 #include "supabase.h"
+#include "Adafruit_TCS34725.h"
+#include <Wire.h>
 
-uint8_t nextion = 12; // este valor será enviado pela nextion
+// Inicializa o sensor com ganho padrão
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
-uint8_t start_motor = 13;
+uint8_t nextion = 8; // este valor será enviado pela nextion// nao deu certo //usar um botao
 
-const int S0 = 6;
-const int S1 = 5;
-const int S2 = 3;
-const int S3 =  2;
-const int OUT = 4;
+uint8_t start_motor = 6;
 
 enum CorDetectada {
   SEM_OBJETO,
@@ -22,6 +21,7 @@ enum CorDetectada {
 int red = 0;
 int green = 0;
 int blue = 0;
+int control = 0;
 
 const int limiarSemObjeto = 105;
 const int limiarSemObjeto2 = 70;
@@ -41,8 +41,9 @@ int sensores [9][2] = {
 int relays [4][2] = {
   { 9, 0},//cilindro1
   { 10, 0},//cilindro2
-  { 11, 0},//cilindro3
-  { 7, 0}//dobot_entrada
+  { 2, 0},//cilindro3
+  { 7, 0},//dobot_entrada
+  { 3, 0} // Retorno_rampa3
 };
 
 
@@ -60,6 +61,8 @@ void setup() {
 
   Serial.begin(9600);
 
+  while (!Serial);
+
   conectarWiFi();
 
   // put your setup code here, to run once:
@@ -75,18 +78,21 @@ void setup() {
 
   pinMode(limite, INPUT_PULLUP);
 
-  pinMode(S0, OUTPUT);
-  pinMode(S1, OUTPUT);
-  pinMode(S2, OUTPUT);
-  pinMode(S3, OUTPUT);
-  pinMode(OUT, INPUT);
-
-  digitalWrite(S0, HIGH);
-  digitalWrite(S1, LOW);
-
   pinMode(start_motor, OUTPUT);
 
   pinMode(nextion, INPUT_PULLUP);
+
+  iniciarSensorCor();
+}
+
+
+void iniciarSensorCor(){
+
+  if (tcs.begin()) {
+    Serial.println("Sensor TCS34725 detectado!, Conectado com sucesso");
+  } else {
+    Serial.println("Sensor TCS34725 não encontrado. Verifique a conexão I2C.");
+  }
 
 }
 
@@ -136,20 +142,12 @@ void leitura_sensores()
 
 }
 
-void color()
+void color() //configura o sensor
 {
-  digitalWrite(S2, LOW);
-  digitalWrite(S3, LOW);
-  red = pulseIn(OUT, digitalRead(OUT) == HIGH ? LOW : HIGH);
-
-  digitalWrite(S3, HIGH);
-  blue = pulseIn(OUT, digitalRead(OUT) == HIGH ? LOW : HIGH);
-
-  digitalWrite(S2, HIGH);
-  green = pulseIn(OUT, digitalRead(OUT) == HIGH ? LOW : HIGH);
+  tcs.getRawData(&red, &green, &blue, &control);
 }
 
-CorDetectada detectarCor( int r, int g, int b)
+CorDetectada detectarCor( int r, int g, int b) //opera o sensor
 {
   if (r > limiarSemObjeto && g > limiarSemObjeto && b > limiarSemObjeto)
     return SEM_OBJETO;
@@ -157,14 +155,20 @@ CorDetectada detectarCor( int r, int g, int b)
   if (r < limiarSemObjeto2 && g < limiarSemObjeto2 && b < limiarSemObjeto2)
     return SEM_OBJETO;
 
-  if (r < g && r < b && r < 100)
-    return VERMELHO;
-
-  if (g < r && g < b)
-    return VERDE;
-
-  if (b < r && b < g && b < 1000)
-    return AZUL;
+  if (r > g && r > b && r > 0.5) {
+    Serial.println("Cor detectada: VERMELHO");
+    return VERMELHO
+  }
+  
+  if (g > r && g > b && g > 0.3) {
+    Serial.println("Cor detectada: VERDE");
+    return VERDE
+  }
+  
+  if (b > r && b > g && b > 0.3) {
+    Serial.println("Cor detectada: AZUL");
+    return AZUL
+  }
 
   return INDEFINIDO;
 }
@@ -278,7 +282,12 @@ void fim_de_curso()       //implementa um contador
     else if(sensores[8][1])  //FIM DE CURSO 3
     {
       contadores[2][1]++;
-      relays[2][1] = 0;      //reseta a memória do estado da saída
+      relays[2][1] = 0;      // reseta a memória do estado da saída
+
+      // RETORNO RAMPA 3
+      digitalWrite(relays[2][0], LOW); // Desliga acionamento
+      digitalWrite(relays[4][0], HIGH); // Aciona o Retorno
+
       digitalWrite(relays[2][0], LOW);
       sensores[8][1] = 0;
     }
@@ -411,28 +420,3 @@ void loop()
   delay(500);
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
